@@ -1,0 +1,179 @@
+<html>
+<head>
+	<meta charset="utf-8">
+	<script src="https://unpkg.com/deck.gl@^8.9/dist.min.js"></script>
+	<script src="https://unpkg.com/@loaders.gl/3d-tiles@^3.4/dist/dist.min.js"></script>
+	
+	<!-- protobufの利用 -->
+	<script src="https://cdn.jsdelivr.net/npm/protobufjs/dist/protobuf.min.js"></script>
+	
+	<style>
+		#container { position: relative; inset: 0; height: 500px;}
+		#container > * {
+			inset: 0; width: 100%; height: 100%; }
+	</style>
+	<script type="module">
+		// 地理院地図のレイヤー
+		const tileLayer = new deck.TileLayer({
+			  data: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+			  minZoom: 5,
+			  maxZoom: 18,
+			  tileSize: 256,
+			  renderSubLayers: props => new deck.BitmapLayer(props, {
+			    data: null,
+			    image: props.data,
+			    bounds: (({ west, south, east, north }) => [west, south, east, north])(props.tile.bbox),
+			  }),
+		});
+
+		// GeoJSONのレイヤーを作る部分を関数化
+		function getGeoJsonLayer(searchid) {
+			return new deck.GeoJsonLayer({
+				data: 'geojson/Building.geojson',
+				  getFilterValue: (f) => {
+					return   (f.id == searchid) ? 0 : 1;
+				  },
+				  filterRange: [1, 1],
+				  extensions: [new deck.DataFilterExtension({ filterSize: 1 })],
+				  updateTriggers: {
+				    getFilterValue: [searchid]
+				  },
+				// 塗り
+				filled: true,
+				getFillColor: [128, 0, 64, 64],
+				// 線
+				stroked: true,
+				getLineColor: [127, 127, 127],
+				// 高さ押し出し機能をオン
+				extruded: true,
+				// 高さ（立ち上げ）の指定
+				getElevation: f => {
+					return f.properties.measuredHeight;
+				},
+				// GeoJSON中のZ座標は無視
+				positionFormat: 'XY',
+				// ⑩マウスオーバーで色を変える
+				pickable: true,
+				autoHighlight: true,
+				highlightColor: [255, 255, 0, 128],
+				// ⑬ポップアップする
+				onHover: ({x, y, object}) => {
+					const tooltip = document.getElementById('tooltip');
+					if (object) {
+						tooltip.innerHTML = 
+							`<b>${object.properties.name}</b><br>高さ： ${object.properties.measuredHeight}m`;
+						tooltip.style.left= `${x}px`;
+						tooltip.style.top=`${y}px`;
+						tooltip.style.display='block';
+					} else {
+						tooltip.style.display='none';
+					}
+				}
+			});
+		}
+		// ⑨GeoJSONで表示する
+		const geoJsonLayer = getGeoJsonLayer(null);
+		
+		// ⑤deck.glで表示する
+		const deckgl = new deck.Deck({
+			canvas: 'deck-canvas',	// 表示先
+			layers: [
+				tileLayer,	// 地理院地図
+				geoJsonLayer
+			], // 表示レイヤー
+			initialViewState: {	// 初期表示（視点）設定
+				longitude: 139.691722, // 経度
+				latitude: 35.689501,   // 緯度
+				zoom: 15,        // ズーム
+				minZoom: 2,     // 最小ズーム
+				maxZoom: 18,     // 最大ズーム
+				pitch: 45,      // 傾き
+				bearing: 10,    // 回転
+			},
+			controller: true,
+		});
+		
+		// バスリアルタイム情報
+		const GTFS_RT_URL = 'https://api-public.odpt.org/api/v4/gtfs/realtime/ToeiBus';
+		let busLayer = null;
+		
+		// バスのレイヤーを更新する
+		function updateBusLayer() {
+			// GTFSを読み込む
+			fetch(GTFS_RT_URL)
+			    .then(response => response.arrayBuffer())
+			    .then(arrayBuffer => new Uint8Array(arrayBuffer))
+			    .then(gtfsRtFeed => 
+			        protobuf.load('gtfs-realtime.proto').then(root => {
+			            const GtfsRealTime = root.lookupType('transit_realtime.FeedMessage');
+			            const feed = GtfsRealTime.decode(gtfsRtFeed);
+			            return feed;
+			        })
+			    )
+			    .then(feed => {
+			    	// 読み込みOK
+			        const positions = feed.entity.map(entity => ({
+			            position: [
+			                entity.vehicle.position.longitude,
+			                entity.vehicle.position.latitude
+			            ],
+			            routeId: entity.vehicle.trip.routeId
+			        }));
+
+			        // バスのレイヤーを作る
+			        const busLayer = new deck.IconLayer({
+			            id: 'bus-layer',
+			            data: positions,
+			            iconAtlas: 'bus.png',
+			            iconMapping: {
+			            	marker: {x: 0, y: 0, width: 512, height: 270, anchorX: 0, anchorY: 270},
+			            },
+			            getIcon: d => 'marker',
+			            getPosition: d => d.position,
+			            getSize: d => 4,
+			            sizeScale: 5,
+			            pickable: true,
+			            autoHighlight: true
+			        });
+
+			        deckgl.setProps({
+			            layers: [
+			                tileLayer, // 地理院地図
+			                geoJsonLayer,
+			                busLayer
+			            ]
+			        });
+			    })
+			    .catch(error => {
+			        console.error('Error loading GTFS-RT feed:', error);
+			    });
+		}
+		
+		setInterval(updateBusLayer, 10000);
+		
+	</script>
+	<!-- ⑫ツールチップのスタイル -->
+	<style>
+	#tooltip {
+		position: absolute;
+		background-color: rgba(0, 0, 0, 0.8);
+		color: white;
+		padding: 5px;
+		border-radius: 5px;
+		font-size: 12px;
+		width: 200px;
+		height: 48px;
+		display: none;
+		z-index: 1000;
+	}  	
+	</style>
+</head>
+<body>
+	<!-- ②地図の描画領域 -->
+	<div id="container">
+		<canvas id="deck-canvas"></canvas>
+		<!-- ⑪ツールチップを表示する場所 -->
+		<div id="tooltip"></div>
+	</div>
+</body>
+</html>

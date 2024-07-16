@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "新宿駅から都庁まで",
+        "_color": "#000000",
+        "_opacity": 0.5,
+        "_weight": 3
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            139.699439,
+            35.692232
+          ],
+          [
+            139.698125,
+            35.691165
+          ],
+          [
+            139.694794,
+            35.690777
+          ],
+          [
+            139.691548,
+            35.690154
+          ]
+        ]
+      }
+    }
+  ]
+}

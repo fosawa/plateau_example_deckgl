@@ -1,0 +1,142 @@
+<html>
+<head>
+	<meta charset="utf-8">
+	<!-- ①ライブラリの読み込み -->
+	<script src="https://unpkg.com/deck.gl@^8.9/dist.min.js"></script>
+	<script src="https://unpkg.com/@loaders.gl/3d-tiles@^3.4/dist/dist.min.js"></script>
+	<!-- ③地図領域のスタイル定義（100%全体） -->
+	<style>
+		#container { position: fixed; inset: 0; }
+		#container > * {
+			position: absolute; inset: 0; width: 100%; height: 100%; }
+	</style>
+	<script type="module">
+		// ⑥光を当てる
+		// （a）環境光
+		const ambientLight = new deck.AmbientLight({
+		  color: [255, 255, 255],
+		  intensity: 3.0
+		});
+		// （b）太陽光
+		const directionalLight = new deck._SunLight({
+		  timestamp: Date.UTC(2024, 7, 1, 11),
+		  color: [255, 255, 255],
+		  intensity: 3.0,
+		});	
+		// （c）LightingEffectの作成
+		const lightingEffect = new deck.LightingEffect({ambientLight, directionalLight});
+		
+		// ⑦地理院地図のレイヤー
+		const tileLayer = new deck.TileLayer({
+			  data: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+			  minZoom: 5,
+			  maxZoom: 18,
+			  tileSize: 256,
+			  renderSubLayers: props => new deck.BitmapLayer(props, {
+			    data: null,
+			    image: props.data,
+			    bounds: (({ west, south, east, north }) => [west, south, east, north])(props.tile.bbox),
+			  }),
+		});
+
+		// ④3DTilesのレイヤーを準備
+		const plateauLayer = new deck.Tile3DLayer({
+		    data: '3dtiles/tileset.json',
+		    loader: loaders.Tiles3DLoader,
+		    // ⑧高さを引く
+		    onTileLoad: (tileHeader) => {
+		        tileHeader.content.cartographicOrigin.z = 
+		          tileHeader.content.cartographicOrigin.z - (38 + 37);
+		    },   
+		});
+		
+		// ⑨GeoJSONで表示する
+		const geoJsonLayer = new deck.GeoJsonLayer({
+			data: 'geojson/Building.geojson',
+			// 塗り
+			filled: true,
+//			getFillColor: [128, 0, 64, 64],
+			// ⑭建物によって色を変える
+			getFillColor: f => {
+				if (f.id == 'bldg_ffc04e24-60a0-48ce-8b20-93a51c160bb3') {// 都庁第一本庁舎
+					return [0, 255, 0, 128];
+				} else {
+					return [128, 0, 64, 64];
+				}
+			},
+			// 線
+			stroked: true,
+			getLineColor: [127, 127, 127],
+			// 高さ押し出し機能をオン
+			extruded: true,
+			// 高さ（立ち上げ）の指定
+			getElevation: f => {
+				return f.properties.measuredHeight;
+			},
+			// GeoJSON中のZ座標は無視
+			positionFormat: 'XY',
+			// ⑩マウスオーバーで色を変える
+			pickable: true,
+			autoHighlight: true,
+			highlightColor: [255, 255, 0, 128],
+			// ⑬ポップアップする
+			onHover: ({x, y, object}) => {
+				const tooltip = document.getElementById('tooltip');
+				if (object) {
+					tooltip.innerHTML = 
+						`<b>${object.properties.name}</b><br>高さ： ${object.properties.measuredHeight}m`;
+					tooltip.style.left= `${x}px`;
+					tooltip.style.top=`${y}px`;
+					tooltip.style.display='block';
+				} else {
+					tooltip.style.display='none';
+				}
+			}
+		});
+		
+		// ⑤deck.glで表示する
+		const deckgl = new deck.Deck({
+			canvas: 'deck-canvas',	// 表示先
+			layers: [
+				tileLayer,	// 地理院地図
+//				plateauLayer
+				geoJsonLayer
+			], // 表示レイヤー
+			effects: [lightingEffect],	// LightingEffectの指定
+			initialViewState: {	// 初期表示（視点）設定
+				longitude: 139.691722, // 経度
+				latitude: 35.689501,   // 緯度
+				zoom: 15,        // ズーム
+				minZoom: 2,     // 最小ズーム
+				maxZoom: 18,     // 最大ズーム
+				pitch: 45,      // 傾き
+				bearing: 10,    // 回転
+			},
+			controller: true,
+		});
+	</script>
+	<!-- ⑫ツールチップのスタイル -->
+	<style>
+	#tooltip {
+		position: absolute;
+		background-color: rgba(0, 0, 0, 0.8);
+		color: white;
+		padding: 5px;
+		border-radius: 5px;
+		font-size: 12px;
+		width: 200px;
+		height: 48px;
+		display: none;
+		z-index: 1000;
+	}  	
+	</style>
+</head>
+<body>
+	<!-- ②地図の描画領域 -->
+	<div id="container">
+		<canvas id="deck-canvas"></canvas>
+		<!-- ⑪ツールチップを表示する場所 -->
+		<div id="tooltip"></div>
+	</div>
+</body>
+</html>
