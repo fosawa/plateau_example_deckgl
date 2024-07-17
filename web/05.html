@@ -10,7 +10,7 @@
 			position: absolute; inset: 0; width: 100%; height: 100%; }
 	</style>
 	<script type="module">
-		// ⑥光を当てる
+		// ⑧光を当てる
 		// （a）環境光
 		const ambientLight = new deck.AmbientLight({
 		  color: [255, 255, 255],
@@ -25,7 +25,7 @@
 		// （c）LightingEffectの作成
 		const lightingEffect = new deck.LightingEffect({ambientLight, directionalLight});
 		
-		// ⑦地理院地図のレイヤー
+		// ⑥（1）地理院地図のレイヤー
 		const tileLayer = new deck.TileLayer({
 			  data: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
 			  minZoom: 5,
@@ -42,7 +42,7 @@
 		const plateauLayer = new deck.Tile3DLayer({
 		    data: '3dtiles/tileset.json',
 		    loader: loaders.Tiles3DLoader,
-		    // ⑧高さを引く
+		    // ⑦高さを引く
 		    onTileLoad: (tileHeader) => {
 		        tileHeader.content.cartographicOrigin.z = 
 		          tileHeader.content.cartographicOrigin.z - (38 + 37);
@@ -52,7 +52,7 @@
 		const deckgl = new deck.Deck({
 			canvas: 'deck-canvas',	// 表示先
 			layers: [
-				tileLayer,	// 地理院地図
+				tileLayer,	⑥（2）地理院地図
 				plateauLayer
 			], // 表示レイヤー
 			effects: [lightingEffect],	// LightingEffectの指定
